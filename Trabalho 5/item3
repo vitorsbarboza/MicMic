@@ -408,7 +408,80 @@ module mem(input clock, we,
   assign vdata = RAM[vaddr]; 
 
   always @(posedge clock)
-    if (we) RAM[address] <= data;
+    if (we) RAM[address + 1] <= data;
+endmodule
+
+module roll(
+  input clk, reset,
+  output reg we, 
+  inout [7:0] data,
+  output reg [8:0] addr);
+  
+  parameter LOAD = 0, MEM_SHIFT = 1, STORE = 2, DELAY = 3; 
+  integer counter;
+  reg [7:0] idata, fdata;
+  reg [1:0] state;
+
+  always @(posedge clk or posedge reset)
+    if (reset)
+    begin
+      state <= LOAD; 
+      counter <= 0;
+      addr <= 0;
+      we <= 0; 
+    end
+    else
+    begin
+      case (state)
+      LOAD:
+      begin
+        fdata <= data;
+        addr <= addr + 1;
+        state <= MEM_SHIFT;
+      end
+      MEM_SHIFT:
+      begin
+        if (!we) 
+        begin
+          idata <= data;
+          we <= 1;
+          addr <= addr - 1;
+        end
+        else
+        begin
+          we <= 0;
+          addr <= addr + 2;
+          if (addr == 298)
+          begin
+            idata <= fdata;
+            addr <= 299;
+            we <= 1;
+            state <= STORE;
+          end
+        end
+      end
+      STORE:
+      begin
+        we <= 0;
+        addr <= 0;
+        counter <= counter + 1;
+        if (counter == 19)
+          state <= DELAY;
+        else
+          state <= LOAD;
+      end
+      DELAY:
+      begin
+        counter <= counter + 1;
+        if (!counter[22:0])
+        begin
+          state <= LOAD;
+          counter <= 0;  
+        end
+      end
+      endcase
+    end
+  assign data = we ? idata : 'bz;
 endmodule
 
 module vga(
